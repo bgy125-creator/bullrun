@@ -19,11 +19,15 @@ service cloud.firestore {
 
       match /players/{pid} {
         allow create, update: if signedIn()
+          && exists(/databases/$(database)/documents/rooms/$(rid))
           && pid == request.auth.uid
           && request.resource.data.id == pid
           && request.resource.data.k == rid;
         // 같은 방 랭킹을 보려고 로그인한 참가자는 모두 읽을 수 있다(이름·자산만 저장)
         allow read: if signedIn();
+        // 방을 만든 선생님은 방을 지울 때 참가자 기록도 지울 수 있다
+        allow delete: if teacher()
+          && get(/databases/$(database)/documents/rooms/$(rid)).data.owner == request.auth.uid;
       }
     }
 
