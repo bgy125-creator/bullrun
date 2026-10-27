@@ -1,0 +1,34 @@
+rules_version = '2';
+// 투자 서바이벌 레이스용 Firestore 보안 규칙
+// - 학생: 익명 로그인(자동). 방 목록·같은 방 기록 읽기(랭킹), 자기 진행 기록만 쓰기
+// - 선생님: 구글 로그인. 방 만들기, 결과 공개(open) 바꾸기, 실제 코드·입장 비밀번호는 자기만 읽기
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function teacher() { return signedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous'; }
+
+    match /rooms/{rid} {
+      allow read: if signedIn();
+      allow create: if teacher()
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 20
+        && request.resource.data.h is list
+        && request.resource.data.h.size() == 9;
+      allow update, delete: if teacher() && resource.data.owner == request.auth.uid;
+
+      match /players/{pid} {
+        allow create, update: if signedIn()
+          && pid == request.auth.uid
+          && request.resource.data.id == pid
+          && request.resource.data.k == rid;
+        // 같은 방 랭킹을 보려고 로그인한 참가자는 모두 읽을 수 있다(이름·자산만 저장)
+        allow read: if signedIn();
+      }
+    }
+
+    match /hosts/{uid}/rooms/{rid} {
+      allow read, write: if teacher() && request.auth.uid == uid;
+    }
+  }
+}

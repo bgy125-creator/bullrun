@@ -1,0 +1,8 @@
+# 깃허브에는 게임에 필요한 파일만 올린다
+*
+!.gitignore
+!index.html
+!invest-race.html
+!firestore.rules
+!firebase.json
+!.firebaserc
