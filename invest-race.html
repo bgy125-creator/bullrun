@@ -233,7 +233,7 @@ function codeBox(){if(live()||S.solo)return '';return `<details class='card'><su
 function copyCode(){const t=document.getElementById('cc');t.select();try{navigator.clipboard.writeText(t.value)}catch(e){document.execCommand('copy')}}
 function hostRoomName(){return((document.getElementById('hr')||{}).value||'').trim()||'교실'}
 // 진행자 비밀번호는 rkey(비밀번호) 값으로만 저장한다
-const HPW='rmesqa';let HOK=false;
+const HPW='r155on8p';let HOK=false;
 function hostLogin(){if(rkey(document.getElementById('hpw').value)===HPW){HOK=true;hostV()}else document.getElementById('hpm').textContent='비밀번호가 달라요. 다시 입력해 주세요.'}
 function hostV(){if(!HOK){$.innerHTML=`<h1>🎙️ 진행자 화면</h1><div class='card'><p>진행자 비밀번호를 입력하세요.</p><input id='hpw' type='password' class='amt' style='width:100%;text-align:left' autocomplete='off' onkeydown="if(event.key==='Enter')hostLogin()"><p id='hpm' style='color:var(--no);margin:6px 0 0'></p><button class='btn' onclick='hostLogin()'>들어가기</button><button class='btn' style='background:#555' onclick="location.hash=''">← 처음으로</button></div>`;return}
  if(DB&&FBA&&!fbGoogle()){$.innerHTML=`<h1 id='hostv'>🎙️ 진행자 화면</h1><div class='card'><h2>🔐 선생님 로그인</h2><p>방을 만들고 학생 진행 상황을 보려면 선생님 구글 계정으로 한 번 로그인해야 해요. 학생은 로그인하지 않아도 돼요.</p><p id='hgm' style='color:var(--no);margin:6px 0 0'></p><button class='btn' onclick='hostSignIn()'>구글 계정으로 로그인</button><button class='btn' style='background:#555' onclick="location.hash=''">← 처음으로</button></div>`;return}
