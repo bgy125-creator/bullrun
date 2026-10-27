@@ -49,6 +49,15 @@ ol{padding-left:20px;margin:0}ol li{margin:6px 0}.big{font-size:24px;font-weight
 .sadst{height:150px;font-size:110px;line-height:150px}
 .sad{opacity:0;animation:sad .9s ease .2s forwards}
 .bigicon{font-size:96px;line-height:1.15}
+.fbk{text-align:center;margin-top:12px}.fbstage{position:relative;height:110px;line-height:110px;overflow:hidden}
+.thumbs{font-size:64px;display:inline-block;animation:pop .6s ease both}.thumbs span{display:inline-block;transform:scaleX(-1)}
+.xmark{font-size:64px;display:inline-block;position:relative;z-index:1;animation:shake .6s ease both}
+.star{position:absolute;font-size:20px;line-height:1;animation:twinkle 1.2s ease-in-out infinite}
+@keyframes twinkle{0%,100%{opacity:.15;transform:scale(.6)}50%{opacity:1;transform:scale(1.25)}}
+.drop{position:absolute;top:-20px;width:3px;height:18px;background:#339af0;border-radius:2px;opacity:.85;animation:fall .9s linear infinite}
+@keyframes fall{from{transform:translateY(-40px)}to{transform:translateY(110px)}}
+.fbmsg{font-size:22px;font-weight:800;margin:4px 0 2px}.fbk.good .fbmsg{color:var(--pri)}.fbk.bad .fbmsg{color:#1971c2}
+@media(prefers-reduced-motion:reduce){.thumbs,.xmark,.star,.drop{animation:none!important}}
 @media(prefers-reduced-motion:reduce){.sad,.bigicon{animation-duration:.01s!important;animation-delay:0s!important}}
 textarea{font:inherit;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx);padding:8px;width:100%}
 </style></head><body><main id="app"></main>
@@ -115,11 +124,19 @@ function bday(){
 function head(){const p=S.ps[S.i];return `<div class="mut">${S.i+1}/${S.ps.length}회차 · 보유 자산 ${f(S.w)}</div><h1>${p.s}.${S.m}.${S.d} 투자</h1>`}
 function ask(){
  const q=S.qs[S.qi];
- $.innerHTML=head()+`<div class="card"><h2>🧠 뉴스 브리핑 퀴즈 ${S.qi+1}/2</h2><p>${q.q}</p>${q.o.map((o,k)=>`<button class="opt" onclick="ans(${k})">${o}</button>`).join('')}</div>`}
+ $.innerHTML=head()+`<div class="card"><h2>🧠 뉴스 브리핑 퀴즈 ${S.qi+1}/2</h2><p>${q.q}</p>${q.o.map((o,k)=>`<button class="opt" onclick="ans(${k})">${o}</button>`).join('')}<div id="fb"></div></div>`}
+// 퀴즈 정답·오답 효과: 정답은 양손 엄지 + 반짝이는 별, 오답은 X + 비
+function quizFb(ok){const two=S.qi===1,first=S.qs[0].a;let m,sub;
+ if(ok){m=two&&first?'완벽해요!':'참 잘했어요!';sub=!two?'이 기세로 다음 문제도 도전해 봐요!':first?'두 문제 모두 맞혀서 뉴스 브리핑 2개를 받아요!':'뉴스 브리핑 1개를 받아요!'}
+ else{m='아쉬워요!';sub=!two?'틀려도 괜찮아요. 도전을 멈추지 마세요! 💪':first?'그래도 한 문제는 맞혔어요. 뉴스 브리핑 1개를 받아요. 다음엔 둘 다 맞혀 봐요! 💪':'이번엔 브리핑이 없지만 괜찮아요. 다음 회차에 다시 도전해요! 💪'}
+ const P=[[8,15],[20,70],[32,8],[68,10],[80,65],[92,20],[14,45],[86,42]],stars=P.map((p,i)=>`<span class='star' style='left:${p[0]}%;top:${p[1]}%;animation-delay:${(i*.17).toFixed(2)}s'>${i%2?'⭐':'✨'}</span>`).join(''),
+  rain=Array.from({length:16},(_,i)=>`<span class='drop' style='left:${(i*6.3+3).toFixed(1)}%;top:${(i*37)%90-25}px;animation-duration:${(.8+(i%4)*.1).toFixed(1)}s;animation-delay:-${((i*37)%90/100).toFixed(2)}s'></span>`).join('');
+ return `<div class='fbk ${ok?'good':'bad'}'><div class='fbstage'>${ok?stars+`<span class='thumbs' aria-label='엄지 척'><span>👍</span>👍</span>`:rain+`<span class='xmark'>❌</span>`}</div><p class='fbmsg'>${m}</p><p style='margin:0'>${sub}</p></div>`}
 function ans(k){
  const q=S.qs[S.qi];q.a=q.o[k]===q.c;
  const bs=document.querySelectorAll('.opt');bs.forEach((b,j)=>{b.disabled=true;if(q.o[j]===q.c)b.classList.add('ok');else if(j===k)b.classList.add('no')});
- setTimeout(()=>{S.qi++;S.qi<2?ask():reveal()},900)}
+ const fb=document.getElementById('fb');if(fb)fb.innerHTML=quizFb(q.a);
+ setTimeout(()=>{S.qi++;S.qi<2?ask():reveal()},2400)}
 // bio: 종목코드 068270은 2005.7.19 코스닥에 상장한 오알켐 주식이고, 셀트리온은 2008.8.19 합병으로 우회상장했으므로 2008년까지는 셀트리온 주가가 아님
 const LST={ent:2000,bio:2008,chem:2001};
 function unl(id,p){return LST[id]!==undefined&&p.s<=LST[id]}
