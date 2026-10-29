@@ -113,6 +113,8 @@ const pc=x=>(x>=0?"+":"")+x.toFixed(1)+"%";
 // 투자 기간: 1999년생과 그 이전은 2000년부터 5년마다(마지막 2020~2025는 6년, 총 5회차), 2000년생부터는 3년마다
 function periods(by){const a=[];if(by<=1999){for(let s=2000;s<=2020;s+=5)a.push({s,e:s===2020?2025:s+4});return a}for(let s=by+1;s<=2025;s+=3)a.push({s,e:Math.min(s+2,2025)});return a}
 const GAP=y=>y<=1999?5:3;
+// 정기예금 이름은 회차 길이에 맞춘다(5년 회차면 5년 정기예금)
+function depName(){const d=A.find(a=>a[0]==='dep');if(d)d[1]=S.ps&&S.ps[0]&&S.ps[0].e-S.ps[0].s===4?'🏦 5년 정기예금':'🏦 3년 정기예금'}
 const BRC=[["1999-05-06",4.75],["2000-02-10",5],["2000-10-05",5.25],["2001-02-08",5],["2001-07-05",4.75],["2001-08-09",4.5],["2001-09-19",4],["2002-05-07",4.25],["2003-05-13",4],["2003-07-10",3.75],["2004-08-12",3.5],["2004-11-11",3.25],["2005-10-11",3.5],["2005-12-08",3.75],["2006-02-09",4],["2006-06-08",4.25],["2006-08-10",4.5],["2007-07-12",4.75],["2007-08-09",5],["2008-08-07",5.25],["2008-10-09",5],["2008-10-27",4.25],["2008-11-07",4],["2008-12-11",3],["2009-01-09",2.5],["2009-02-12",2],["2010-07-09",2.25],["2010-11-16",2.5],["2011-01-13",2.75],["2011-03-10",3],["2011-06-10",3.25],["2012-07-12",3],["2012-10-11",2.75],["2013-05-09",2.5],["2014-08-14",2.25],["2014-10-15",2],["2015-03-12",1.75],["2015-06-11",1.5],["2016-06-09",1.25],["2017-11-30",1.5],["2018-11-30",1.75],["2019-07-18",1.5],["2019-10-16",1.25],["2020-03-17",0.75],["2020-05-28",0.5],["2021-08-26",0.75],["2021-11-25",1],["2022-01-14",1.25],["2022-04-14",1.5],["2022-05-26",1.75],["2022-07-13",2.25],["2022-08-25",2.5],["2022-10-12",3],["2022-11-24",3.25],["2023-01-13",3.5],["2024-10-11",3.25],["2024-11-28",3],["2025-02-25",2.75],["2025-05-29",2.5]];
 function rateAt(y,m,d){const k=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');let r=BRC[0][1];BRC.forEach(c=>{if(c[0]<=k)r=c[1]});return r}
 function depRate(p){const f=S.ps&&S.ps[0]&&p.s===S.ps[0].s;return f?rateAt(p.s,S.m,S.d):rateAt(p.s,1,1)}
@@ -157,7 +159,7 @@ function resumeBox(){const o=loadGame();if(!o)return '';const s=o.S;return `<div
 async function resumeGame(){const o=loadGame(),m=document.getElementById('rsmsg');if(!o){if(m)m.textContent='저장된 게임을 찾지 못했어요.';return}const s=o.S;
  if(s.rid){if(!DB){m.textContent='연결 중이에요. 잠시 뒤 다시 눌러 주세요.';return}let ex=false;try{const d=await DB.doc('rooms/'+s.rid).get();ex=!!(d&&d.exists)}catch(e){m.textContent='방 정보를 확인하지 못했어요. 잠시 뒤 다시 눌러 주세요.';return}
   if(!ex){clearGame();m.textContent='참여하던 방이 없어져서 이어 할 수 없어요. 새로 시작해 주세요.';setTimeout(()=>{if(document.getElementById('rsm'))document.getElementById('rsm').remove()},3000);return}}
- S=s;NM=o.nm||s.nm;if(FBA&&FBA.currentUser)S.pid=FBA.currentUser.uid;S.waiting=false;roomSub();report(S.st||'join');
+ S=s;NM=o.nm||s.nm;depName();if(FBA&&FBA.currentUser)S.pid=FBA.currentUser.uid;S.waiting=false;roomSub();report(S.st||'join');
  const st=S.stage;if(st==='quiz')S.qi>=2?reveal():ask();else if(st==='draw')pick2();else if(st==='wait')wait();else if(st==='res')nextP();else if(st==='ask')askInfo();else roundStart()}
 function begin(){
  const v=document.getElementById('bd').value;if(!v)return;
@@ -172,7 +174,7 @@ function begin(){
  if(ROOMU){try{ROOMU()}catch(e){}ROOMU=null}
  const rm=R0?{room:R0.name,rid:R0.id,rsalt:R0.salt,rh:R0.h,rmode:R0.mode==='btn'?'btn':'code',lv:R0.lv==='easy'?'easy':'hard',ropen:-1,use:cls?'class':'game',sid}:(rv==='solo'||DB)?{room:'혼자 연습',solo:1,lv:((document.querySelector('input[name=slv]:checked')||{}).value)==='easy'?'easy':'hard'}:{room:PRE.rmName||'교실'};
  S={...rm,nm:NM||'참가자',y,m,d,ps:periods(y),i:0,w:1000000,log:[],risk:[],hist:[1e6],pid:FBA&&FBA.currentUser?FBA.currentUser.uid:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)};report('join');
- roomSub();
+ roomSub();depName();
  bday()}
 function bday(){
  if(S.y<1999){const s=S.ps[0].s,a=s-S.y;$.innerHTML=`<div class="card" style="padding:0;overflow:hidden"><img src="${IMG2}" alt="생일 파티 그림" style="width:100%;display:block"></div><div class="card" style="text-align:center"><h1 style="font-size:21px;line-height:1.45">🎉 ${s}년 ${S.m}월 ${S.d}일, ${esc(S.nm)}님의 만 ${a}세 생일을 축하합니다!</h1><p style="font-size:18px;font-weight:700;margin:8px 0">새로운 도전은 언제나 설레는 일!</p><p style="font-size:18px;font-weight:700;margin:8px 0">생일 선물 <span style="color:var(--pri)">100만 원</span>과 함께 투자 레이스를 시작해요.</p><p style="font-weight:700;margin:8px 0 0">${esc(S.nm)}님의 투자 성공을 기원합니다! 💪</p><p class="mut" style="margin-top:10px">첫 투자일 ${s}.${S.m}.${S.d}.</p>${gapNote()}</div><button class="btn" onclick="roundStart()">🎁 받고 첫 투자 시작하기</button>`;return}
@@ -343,12 +345,12 @@ function resCode(){const o={v:1,nm:S.nm,room:S.solo?'':S.room,y:S.y,m:S.m,d:S.d,
 function resLink(){return location.origin+location.pathname+'#r='+resCode()}
 function viewRes(code){try{const o=JSON.parse(decodeURIComponent(escape(atob(code.replace(/-/g,'+').replace(/_/g,'/')))));if(o.v!==1||!Array.isArray(o.lg)||!o.lg.length)throw 0;
   const lg=o.lg.map(a=>({p:{s:a[0],e:a[1]},sel:a[2],r:a[3],it:a[4].map(t=>({id:t[0],amt:t[1],x:t[2]})),cash:a[5]}));
-  S={view:1,nm:String(o.nm||'참가자').slice(0,12),room:String(o.room||''),solo:o.room?0:1,y:o.y,m:o.m,d:o.d,w:o.w,hist:o.h,ty:o.ty,rk:o.rk,log:lg,ps:lg.map(x=>x.p),i:lg.length};finalPg()}
+  S={view:1,nm:String(o.nm||'참가자').slice(0,12),room:String(o.room||''),solo:o.room?0:1,y:o.y,m:o.m,d:o.d,w:o.w,hist:o.h,ty:o.ty,rk:o.rk,log:lg,ps:lg.map(x=>x.p),i:lg.length};depName();finalPg()}
  catch(e){$.innerHTML=`<div class='card'><h2>결과 링크를 열 수 없어요</h2><p class='mut'>링크가 잘렸거나 바뀐 것 같아요. 결과를 다시 보내 달라고 해 주세요.</p></div><button class='btn' onclick='again()'>게임 처음으로</button>`}}
 function again(){if(location.hash)location.hash='';else start()}
 // 같은 방 랭킹을 아직 안 봤으면 보낼 때 계산해 둔다
 async function rankCalc(){if(S.rk||S.view||!S.rid||!DB)return;try{const P={};const sn=await DB.collection('rooms/'+S.rid+'/players').get();sn.docs.forEach(d=>{const r=okRec(d.data());if(r)P[r.id]=r});P[S.pid]={id:S.pid,h:S.hist.slice()};const L=Object.values(P).map(r=>({w:r.h[r.h.length-1],me:r.id===S.pid})).sort((a,b)=>b.w-a.w);S.rk=[L.findIndex(x=>x.me)+1,L.length]}catch(e){}}
-async function shareRes(){const m=document.getElementById('shmsg');await rankCalc();const u=resLink(),t=`📈 ${S.nm}님의 투자 서바이벌 레이스 결과 (수익률 ${pc((S.w/1e6-1)*100)})`;
+async function shareRes(){const m=document.getElementById('shmsg');await rankCalc();const u=resLink(),t=`📈 ${S.nm}님의 투자 서바이벌 레이스 결과 다시 보기 링크`;
  if(navigator.share){try{await navigator.share({title:'투자 서바이벌 레이스 결과',text:t,url:u});return}catch(e){if(e&&e.name==='AbortError')return}}
  try{await navigator.clipboard.writeText(t+'\n'+u);if(m)m.textContent="결과 링크를 복사했어요. 카카오톡 '나와의 채팅'에 붙여 넣어 보내세요.";return}catch(e){}
  if(m)m.innerHTML=`아래 링크를 길게 눌러 복사한 뒤 카카오톡에 붙여 넣으세요.<textarea rows='4' readonly style='margin-top:6px'>${esc(u)}</textarea>`}
