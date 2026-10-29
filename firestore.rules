@@ -29,6 +29,20 @@ service cloud.firestore {
         allow delete: if teacher()
           && get(/databases/$(database)/documents/rooms/$(rid)).data.owner == request.auth.uid;
       }
+
+      // 수업용 방의 학생 후기(학번·이름·글): 학생은 자기 후기만 쓰고, 읽기·삭제는 방을 만든 선생님만
+      match /reviews/{pid} {
+        allow create, update: if signedIn()
+          && exists(/databases/$(database)/documents/rooms/$(rid))
+          && pid == request.auth.uid
+          && request.resource.data.id == pid
+          && request.resource.data.k == rid
+          && request.resource.data.q1 is string && request.resource.data.q1.size() <= 1000
+          && request.resource.data.q2 is string && request.resource.data.q2.size() <= 1000
+          && request.resource.data.q3 is string && request.resource.data.q3.size() <= 1000;
+        allow read, delete: if teacher()
+          && get(/databases/$(database)/documents/rooms/$(rid)).data.owner == request.auth.uid;
+      }
     }
 
     match /hosts/{uid}/rooms/{rid} {
