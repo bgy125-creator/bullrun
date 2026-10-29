@@ -204,7 +204,7 @@ function settle2(){const p=S.ps[S.i],ids=Object.keys(S.al).filter(k=>S.al[k]>0),
  const items=ids.map(id=>({id,amt:S.al[id],x:gr(id,p)}));
  const after=Math.floor(cash+items.reduce((a,b)=>a+b.amt*b.x,0));
  S.cur={p,ids,items,cash,before:S.w,after,start:S.rs,fee:S.fee||0};
- /* 투자성향 점수: 이번 회차 금액 비중으로 가중평균(남은 현금은 0점) */{const tot=ids.reduce((t,id)=>t+S.al[id],0)+Math.max(0,cash);S.risk.push(tot>0?ids.reduce((t,id)=>t+S.al[id]*A.find(x=>x[0]==id)[2],0)/tot:0)}saveGame('wait');wait()}
+ /* 투자성향 점수: 이번 회차 금액 비중 가중평균(남은 현금은 0점)에 분산 정도를 곱한다. 투자한 돈끼리의 실질 종목 수(1/Σ비중², ETF는 여러 회사를 담아 5곳으로 나눈 것으로 봄)가 1.5 미만이면 ×(1+0.5/3), 3.5 이상이면 ×(1-0.3/3) */{const iv=ids.reduce((t,id)=>t+S.al[id],0),tot=iv+Math.max(0,cash);let sc=tot>0?ids.reduce((t,id)=>t+S.al[id]*A.find(x=>x[0]==id)[2],0)/tot:0;if(iv>0){const ne=1/ids.reduce((t,id)=>{const w=S.al[id]/iv;return t+(id==='kospi'||id==='sp'?w*w/5:w*w)},0);sc*=ne<1.5?1+0.5/3:ne>=3.5?1-0.3/3:1}S.risk.push(sc)}saveGame('wait');wait()}
 function showRes(){const c=S.cur,g=c.after/c.start;S.w=c.after;S.hist.push(S.w);report('shown');S.log.push({p:c.p,sel:c.ids,r:(g-1)*100,it:c.items,cash:c.cash});saveGame('res');
  const row=(n,a,b,r)=>`<div class='row'><div><b style='font-size:17px'>${n}</b><div class='mut' style='font-size:14px'>${f(a)} → ${f(b)}</div></div><div class='big ${r>=0?'up':'dn'}'>${pc(r)}</div></div>`;
  const feeRow=c.fee?`<div class='row'><div><b style='font-size:17px'>🕵️ 극비뉴스 이용료</b><div class='mut' style='font-size:14px'>정보 이용료 (자산에서 차감됨)</div></div><div class='big dn'>−${f(c.fee)}</div></div>`:'';
