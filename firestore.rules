@@ -3,7 +3,7 @@ rules_version = '2';
 // Econ Play + Bull Run 공용 Firestore 보안 규칙 (프로젝트 bullrun-b29a5)
 // 이 파일 하나만 게시한다(Bull Run 폴더의 fb-rules.ps1도 이 파일을 게시).
 // - 마스터: bgy125@gmail.com 구글 계정. 모든 기록을 보고 지울 수 있다.
-// - 선생님: 구글 로그인 + 마스터가 준 초대 코드로 등록(teachers/{uid}, st=='ok'). 방 수·학생 수 제한(lim).
+// - 선생님: 구글 로그인 → 가입 요청(tReqs) → 마스터가 허용하면 등록(teachers/{uid}, st=='ok'). 방 수·학생 수 제한(lim).
 // - Econ Play 학생: 학교 + 학번 + PIN (이메일·비밀번호 로그인, 이메일 = 학교코드_학번-v판@econplay.app). 가입 때 입장 코드로 반에 들어간다.
 // - Bull Run 학생: 익명 로그인(또는 Econ Play 학생 로그인 그대로).
 service cloud.firestore {
@@ -30,16 +30,10 @@ service cloud.firestore {
     match /teachers/{uid} {
       allow get: if master() || (google() && request.auth.uid == uid);
       allow list: if master();
-      // 마스터는 초대 코드 없이 자기 자신을 등록, 다른 선생님은 쓰지 않은 초대 코드가 있어야 한다
-      allow create: if google() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['nm', 'em', 't', 'st', 'lim', 'er', 'br', 'inv', 'sc', 'scn'])
-        && request.resource.data.st == 'ok' && request.resource.data.er == 0 && request.resource.data.br == 0
-        && request.resource.data.em == request.auth.token.email
-        && (master()
-          || (request.resource.data.lim == {'er': 10, 'es': 40, 'br': 5, 'bp': 100}
-            && request.resource.data.inv is string
-            && get(/databases/$(database)/documents/invites/$(request.resource.data.inv)).data.used == false
-            && getAfter(/databases/$(database)/documents/invites/$(request.resource.data.inv)).data.by == uid));
+      // 선생님 등록은 마스터만 한다(마스터 자신, 또는 가입 요청을 허용할 때)
+      allow create: if master()
+        && request.resource.data.keys().hasOnly(['nm', 'em', 't', 'st', 'lim', 'er', 'br', 'sc', 'scn'])
+        && request.resource.data.st == 'ok' && request.resource.data.er == 0 && request.resource.data.br == 0;
       // 선생님 본인은 방 개수 칸(er: Econ Play 반 방, br: Bull Run 방)만 제한 안에서 바꾼다
       allow update: if master()
         || (teacher() && request.auth.uid == uid && onlyKeys(['er', 'br'])
@@ -51,13 +45,18 @@ service cloud.firestore {
       allow delete: if master();
     }
 
-    // ───── 초대 코드(마스터가 만들고, 선생님 등록 때 한 번 쓰면 끝)
-    match /invites/{code} {
-      allow read, create, delete: if master();
-      allow update: if master()
-        || (google() && resource.data.used == false && onlyKeys(['used', 'by', 'ut'])
-          && request.resource.data.used == true && request.resource.data.by == request.auth.uid
-          && existsAfter(tpath(request.auth.uid)) && getAfter(tpath(request.auth.uid)).data.inv == code);
+    // ───── 선생님 가입 요청(구글 로그인한 사람이 보내고, 마스터가 허용·거절)
+    match /tReqs/{uid} {
+      allow get: if master() || (google() && request.auth.uid == uid);
+      allow list: if master();
+      allow create: if google() && request.auth.uid == uid && !exists(tpath(uid))
+        && request.resource.data.keys().hasOnly(['nm', 'em', 't', 'scn', 'memo', 'st'])
+        && request.resource.data.em == request.auth.token.email && request.resource.data.st == 'wait'
+        && request.resource.data.nm is string && request.resource.data.nm.size() >= 1 && request.resource.data.nm.size() <= 20
+        && request.resource.data.scn is string && request.resource.data.scn.size() <= 30
+        && request.resource.data.memo is string && request.resource.data.memo.size() <= 200;
+      allow update: if master();
+      allow delete: if master() || (google() && request.auth.uid == uid);
     }
 
     // ───── Econ Play 반 방(문서 이름 = 4자리 입장 코드)
