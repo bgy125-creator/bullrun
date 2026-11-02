@@ -75,6 +75,9 @@ service cloud.firestore {
       allow update: if master()
         || (teacher() && resource.data.owner == request.auth.uid && onlyKeys(['nm', 'closed', 'n'])
           && request.resource.data.n <= resource.data.n)
+        // 학교를 정하기 전에 만든 반에 선생님 학교를 붙인다
+        || (teacher() && resource.data.owner == request.auth.uid && onlyKeys(['sc'])
+          && !('sc' in resource.data) && request.resource.data.sc == tme().sc)
         // 학생 가입: 인원 칸만 1 늘린다(제한 안에서, 새 학생 받기 중일 때)
         || (signedIn() && onlyKeys(['n']) && resource.data.closed == false
           && request.resource.data.n == resource.data.n + 1 && request.resource.data.n <= resource.data.lim);
