@@ -4,7 +4,7 @@ rules_version = '2';
 // 이 파일 하나만 게시한다(Bull Run 폴더의 fb-rules.ps1도 이 파일을 게시).
 // - 마스터: bgy125@gmail.com 구글 계정. 모든 기록을 보고 지울 수 있다.
 // - 선생님: 구글 로그인 → 가입 요청(tReqs) → 마스터가 허용하면 등록(teachers/{uid}, st=='ok'). 방 수·학생 수 제한(lim).
-// - Econ Play 학생: 학교 + 학번 + PIN (이메일·비밀번호 로그인, 이메일 = 학교코드_학번-v판@econplay.app). 가입 때 입장 코드로 반에 들어간다.
+// - Econ Play 학생: 학교 + 학번 + PIN (이메일·비밀번호 로그인, 이메일 = 학교코드_학번-v판@econplay.app). 반은 가입 요청 → 선생님 허용.
 // - Bull Run 학생: 익명 로그인(또는 Econ Play 학생 로그인 그대로).
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -59,12 +59,11 @@ service cloud.firestore {
       allow delete: if master() || (google() && request.auth.uid == uid);
     }
 
-    // ───── Econ Play 반 방(문서 이름 = 4자리 입장 코드)
+    // ───── Econ Play 반 방(문서 이름 = 4자리 번호, 학생에게는 보이지 않음). 학생은 반 목록에서 골라 가입 요청을 보낸다.
     match /eRooms/{code} {
-      allow get: if true;
-      allow list: if master() || (teacher() && resource.data.owner == request.auth.uid);
+      allow get, list: if true;
       allow create: if teacher() && code.matches('^[0-9]{4}$')
-        && request.resource.data.keys().hasOnly(['nm', 'owner', 't', 'n', 'lim', 'closed', 'sc'])
+        && request.resource.data.keys().hasOnly(['nm', 'owner', 'tn', 't', 'n', 'lim', 'closed', 'sc'])
         && request.resource.data.sc == tme().sc
         && request.resource.data.owner == request.auth.uid
         && request.resource.data.nm is string && request.resource.data.nm.size() >= 1 && request.resource.data.nm.size() <= 20
@@ -72,14 +71,12 @@ service cloud.firestore {
         && request.resource.data.lim == tme().lim.es
         && tmeAfter().er == tme().er + 1;
       allow update: if master()
-        || (teacher() && resource.data.owner == request.auth.uid && onlyKeys(['nm', 'closed', 'n'])
-          && request.resource.data.n <= resource.data.n)
+        // 반 주인 선생님: 이름·새 학생 받기·인원(허용할 때 늘림, 제한 안에서)·선생님 이름
+        || (teacher() && resource.data.owner == request.auth.uid && onlyKeys(['nm', 'closed', 'n', 'tn'])
+          && request.resource.data.n >= 0 && request.resource.data.n <= resource.data.lim)
         // 학교를 정하기 전에 만든 반에 선생님 학교를 붙인다
         || (teacher() && resource.data.owner == request.auth.uid && onlyKeys(['sc'])
-          && !('sc' in resource.data) && request.resource.data.sc == tme().sc)
-        // 학생 가입: 인원 칸만 1 늘린다(제한 안에서, 새 학생 받기 중일 때)
-        || (signedIn() && onlyKeys(['n']) && resource.data.closed == false
-          && request.resource.data.n == resource.data.n + 1 && request.resource.data.n <= resource.data.lim);
+          && !('sc' in resource.data) && request.resource.data.sc == tme().sc);
       allow delete: if master() || (teacher() && resource.data.owner == request.auth.uid);
     }
 
@@ -95,31 +92,43 @@ service cloud.firestore {
       allow delete: if master();
     }
 
-    // ───── Econ Play 학생 기록(문서 이름 = 학교코드_학번). 반 방을 지워도 기록은 남는다.
+    // ───── Econ Play 학생 기록(문서 이름 = 학교코드_학번). 반을 지워도 기록은 남는다.
+    // 반 가입: 학생이 rq(반 번호)·rqt(그 반 선생님)·rqn(반 이름)으로 요청 → 선생님이 허용하면 code·tu·cn이 채워진다. 거절하면 rj = true.
     match /eStudents/{key} {
       function lv() { return get(/databases/$(database)/documents/eLogins/$(key)).data.v; }
       function lvAfter() { return getAfter(/databases/$(database)/documents/eLogins/$(key)).data.v; }
       function me() { return signedIn() && request.auth.token.email == key + '-v' + string(lv()) + '@econplay.app'; }
       function meAfter() { return signedIn() && request.auth.token.email == key + '-v' + string(lvAfter()) + '@econplay.app'; }
       function room(c) { return get(/databases/$(database)/documents/eRooms/$(c)).data; }
-      function roomAfter(c) { return getAfter(/databases/$(database)/documents/eRooms/$(c)).data; }
+      // 요청이 없거나, 같은 학교의 새 학생을 받는 반이고 그 반 선생님에게 보낸 요청
+      function okReq(d) { return d.get('rq', null) == null
+        || (room(d.rq).sc == d.sc && room(d.rq).owner == d.rqt && room(d.rq).closed == false && d.rqn is string); }
 
-      allow get: if me() || master() || (teacher() && resource.data.tu == request.auth.uid);
-      allow list: if master() || (teacher() && resource.data.tu == request.auth.uid);
-      // 가입: 로그인 판 번호·방 인원과 함께 한 번에 만든다
+      allow get: if me() || master()
+        || (teacher() && (resource.data.tu == request.auth.uid || resource.data.rqt == request.auth.uid));
+      allow list: if master()
+        || (teacher() && (resource.data.tu == request.auth.uid || resource.data.rqt == request.auth.uid));
+      // 가입: 로그인 판 번호와 함께 만든다. 반에는 아직 들어가지 않은 상태(요청만)
       allow create: if meAfter()
-        && request.resource.data.keys().hasOnly(['sid', 'nm', 'sex', 'sc', 'scn', 'code', 'tu', 't', 'day', 'U'])
+        && request.resource.data.keys().hasOnly(['sid', 'nm', 'sex', 'sc', 'scn', 'code', 'tu', 'cn', 'rq', 'rqt', 'rqn', 'rj', 't', 'day', 'U'])
         && key == request.resource.data.sc + '_' + request.resource.data.sid
-        && room(request.resource.data.code).sc == request.resource.data.sc
         && request.resource.data.sid.matches('^[0-9]{4,5}$')
         && request.resource.data.nm is string && request.resource.data.nm.size() >= 1 && request.resource.data.nm.size() <= 10
-        && request.resource.data.tu == room(request.resource.data.code).owner
-        && room(request.resource.data.code).closed == false
-        && roomAfter(request.resource.data.code).n == room(request.resource.data.code).n + 1;
+        && request.resource.data.code == null && request.resource.data.tu == null
+        && okReq(request.resource.data);
       allow update: if master()
-        || (me() && onlyKeys(['sex', 'day', 'U']))
-        // 선생님: 반 방을 지울 때 학생과의 연결만 끊는다(기록은 남김)
-        || (teacher() && resource.data.tu == request.auth.uid && onlyKeys(['code', 'tu'])
+        // 학생: 기록 저장, 반이 없을 때 가입 요청 보내기·바꾸기
+        || (me() && onlyKeys(['sex', 'day', 'U', 'rq', 'rqt', 'rqn', 'rj'])
+          && (request.resource.data.rq == resource.data.get('rq', null) || (resource.data.tu == null && okReq(request.resource.data))))
+        // 선생님 허용: 요청한 반으로 연결
+        || (teacher() && resource.data.rqt == request.auth.uid && onlyKeys(['code', 'tu', 'cn', 'rq', 'rqt', 'rqn', 'rj'])
+          && request.resource.data.code == resource.data.rq && request.resource.data.tu == request.auth.uid
+          && request.resource.data.rq == null && request.resource.data.rqt == null)
+        // 선생님 거절
+        || (teacher() && resource.data.rqt == request.auth.uid && onlyKeys(['rq', 'rqt', 'rqn', 'rj'])
+          && request.resource.data.rq == null && request.resource.data.rqt == null && request.resource.data.rj == true)
+        // 선생님: 반을 지울 때 학생과의 연결만 끊는다(기록은 남김)
+        || (teacher() && resource.data.tu == request.auth.uid && onlyKeys(['code', 'tu', 'cn'])
           && request.resource.data.code == null && request.resource.data.tu == null);
       allow delete: if master();
     }
