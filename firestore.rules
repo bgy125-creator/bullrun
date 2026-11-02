@@ -1,12 +1,114 @@
+// ※ 참고용 복사본. 원본은 ../분개 챌린지/firestore.rules (fb-rules.ps1이 원본을 게시한다)
 rules_version = '2';
-// 투자 서바이벌 레이스용 Firestore 보안 규칙
-// - 학생: 익명 로그인(자동). 방 목록·같은 방 기록 읽기(랭킹), 자기 진행 기록만 쓰기
-// - 선생님: 구글 로그인. 방 만들기, 결과 공개(open) 바꾸기, 실제 코드·입장 비밀번호는 자기만 읽기
+// Econ Play + Bull Run 공용 Firestore 보안 규칙 (프로젝트 bullrun-b29a5)
+// 이 파일 하나만 게시한다(Bull Run 폴더의 fb-rules.ps1도 이 파일을 게시).
+// - 마스터: bgy125@gmail.com 구글 계정. 모든 기록을 보고 지울 수 있다.
+// - 선생님: 구글 로그인 + 마스터가 준 초대 코드로 등록(teachers/{uid}, st=='ok'). 방 수·학생 수 제한(lim).
+// - Econ Play 학생: 입장 코드 + 학번 + PIN (이메일·비밀번호 로그인, 이메일 = 방코드_학번-v판@econplay.app).
+// - Bull Run 학생: 익명 로그인(또는 Econ Play 학생 로그인 그대로).
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function teacher() { return signedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous'; }
+    function google() { return signedIn() && request.auth.token.firebase.sign_in_provider == 'google.com'; }
+    function master() { return google() && request.auth.token.email == 'bgy125@gmail.com' && request.auth.token.email_verified == true; }
+    function tpath(uid) { return /databases/$(database)/documents/teachers/$(uid); }
+    function teacher() { return google() && exists(tpath(request.auth.uid)) && get(tpath(request.auth.uid)).data.st == 'ok'; }
+    function tme() { return get(tpath(request.auth.uid)).data; }
+    function tmeAfter() { return getAfter(tpath(request.auth.uid)).data; }
+    function onlyKeys(ks) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(ks); }
 
+    // ───── 선생님 명단
+    match /teachers/{uid} {
+      allow get: if master() || (google() && request.auth.uid == uid);
+      allow list: if master();
+      // 마스터는 초대 코드 없이 자기 자신을 등록, 다른 선생님은 쓰지 않은 초대 코드가 있어야 한다
+      allow create: if google() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['nm', 'em', 't', 'st', 'lim', 'er', 'br', 'inv'])
+        && request.resource.data.st == 'ok' && request.resource.data.er == 0 && request.resource.data.br == 0
+        && request.resource.data.em == request.auth.token.email
+        && (master()
+          || (request.resource.data.lim == {'er': 10, 'es': 40, 'br': 5, 'bp': 100}
+            && request.resource.data.inv is string
+            && get(/databases/$(database)/documents/invites/$(request.resource.data.inv)).data.used == false
+            && getAfter(/databases/$(database)/documents/invites/$(request.resource.data.inv)).data.by == uid));
+      // 선생님 본인은 방 개수 칸(er: Econ Play 반 방, br: Bull Run 방)만 제한 안에서 바꾼다
+      allow update: if master()
+        || (teacher() && request.auth.uid == uid && onlyKeys(['er', 'br'])
+          && request.resource.data.er >= 0 && request.resource.data.er <= resource.data.lim.er
+          && request.resource.data.br >= 0 && request.resource.data.br <= resource.data.lim.br);
+      allow delete: if master();
+    }
+
+    // ───── 초대 코드(마스터가 만들고, 선생님 등록 때 한 번 쓰면 끝)
+    match /invites/{code} {
+      allow read, create, delete: if master();
+      allow update: if master()
+        || (google() && resource.data.used == false && onlyKeys(['used', 'by', 'ut'])
+          && request.resource.data.used == true && request.resource.data.by == request.auth.uid
+          && existsAfter(tpath(request.auth.uid)) && getAfter(tpath(request.auth.uid)).data.inv == code);
+    }
+
+    // ───── Econ Play 반 방(문서 이름 = 4자리 입장 코드)
+    match /eRooms/{code} {
+      allow get: if true;
+      allow list: if master() || (teacher() && resource.data.owner == request.auth.uid);
+      allow create: if teacher() && code.matches('^[0-9]{4}$')
+        && request.resource.data.keys().hasOnly(['nm', 'owner', 't', 'n', 'lim', 'closed'])
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.nm is string && request.resource.data.nm.size() >= 1 && request.resource.data.nm.size() <= 20
+        && request.resource.data.n == 0 && request.resource.data.closed == false
+        && request.resource.data.lim == tme().lim.es
+        && tmeAfter().er == tme().er + 1;
+      allow update: if master()
+        || (teacher() && resource.data.owner == request.auth.uid && onlyKeys(['nm', 'closed', 'n'])
+          && request.resource.data.n <= resource.data.n)
+        // 학생 가입: 인원 칸만 1 늘린다(제한 안에서, 새 학생 받기 중일 때)
+        || (signedIn() && onlyKeys(['n']) && resource.data.closed == false
+          && request.resource.data.n == resource.data.n + 1 && request.resource.data.n <= resource.data.lim);
+      allow delete: if master() || (teacher() && resource.data.owner == request.auth.uid);
+    }
+
+    // ───── Econ Play 로그인 판 번호(PIN을 초기화하면 v가 1 늘어 새 계정으로 다시 가입)
+    match /eLogins/{key} {
+      allow get: if true;
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['v'])
+        && request.resource.data.v == 1
+        && request.auth.token.email == key + '-v1@econplay.app';
+      allow update: if onlyKeys(['v']) && request.resource.data.v == resource.data.v + 1
+        && (master() || (teacher()
+          && get(/databases/$(database)/documents/eStudents/$(key)).data.tu == request.auth.uid));
+      allow delete: if master();
+    }
+
+    // ───── Econ Play 학생 기록(문서 이름 = 방코드_학번). 반 방을 지워도 기록은 남는다.
+    match /eStudents/{key} {
+      function lv() { return get(/databases/$(database)/documents/eLogins/$(key)).data.v; }
+      function lvAfter() { return getAfter(/databases/$(database)/documents/eLogins/$(key)).data.v; }
+      function me() { return signedIn() && request.auth.token.email == key + '-v' + string(lv()) + '@econplay.app'; }
+      function meAfter() { return signedIn() && request.auth.token.email == key + '-v' + string(lvAfter()) + '@econplay.app'; }
+      function room(c) { return get(/databases/$(database)/documents/eRooms/$(c)).data; }
+      function roomAfter(c) { return getAfter(/databases/$(database)/documents/eRooms/$(c)).data; }
+
+      allow get: if me() || master() || (teacher() && resource.data.tu == request.auth.uid);
+      allow list: if master() || (teacher() && resource.data.tu == request.auth.uid);
+      // 가입: 로그인 판 번호·방 인원과 함께 한 번에 만든다
+      allow create: if meAfter()
+        && request.resource.data.keys().hasOnly(['sid', 'nm', 'sex', 'code', 'tu', 't', 'day', 'U'])
+        && key == request.resource.data.code + '_' + request.resource.data.sid
+        && request.resource.data.sid.matches('^[0-9]{4,5}$')
+        && request.resource.data.nm is string && request.resource.data.nm.size() >= 1 && request.resource.data.nm.size() <= 10
+        && request.resource.data.tu == room(request.resource.data.code).owner
+        && room(request.resource.data.code).closed == false
+        && roomAfter(request.resource.data.code).n == room(request.resource.data.code).n + 1;
+      allow update: if master()
+        || (me() && onlyKeys(['sex', 'day', 'U']))
+        // 선생님: 반 방을 지울 때 학생과의 연결만 끊는다(기록은 남김)
+        || (teacher() && resource.data.tu == request.auth.uid && onlyKeys(['code', 'tu'])
+          && request.resource.data.code == null && request.resource.data.tu == null);
+      allow delete: if master();
+    }
+
+    // ───── Bull Run 방
     match /rooms/{rid} {
       allow read: if signedIn();
       allow create: if teacher()
@@ -14,20 +116,32 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() <= 20
         && request.resource.data.h is list
-        && request.resource.data.h.size() == 9;
-      allow update, delete: if teacher() && resource.data.owner == request.auth.uid;
+        && request.resource.data.h.size() == 9
+        && request.resource.data.n == 0
+        && request.resource.data.lim == tme().lim.bp
+        && tmeAfter().br == tme().br + 1;
+      allow update: if master()
+        || (teacher() && resource.data.owner == request.auth.uid && !('n' in request.resource.data.diff(resource.data).affectedKeys()))
+        // 참가자가 처음 들어올 때 인원 칸만 1 늘린다(방당 제한 안에서)
+        || (signedIn() && onlyKeys(['n']) && request.resource.data.n == resource.data.n + 1
+          && request.resource.data.n <= resource.data.lim);
+      allow delete: if master() || (teacher() && resource.data.owner == request.auth.uid);
 
       match /players/{pid} {
-        allow create, update: if signedIn()
+        allow create: if signedIn()
           && exists(/databases/$(database)/documents/rooms/$(rid))
+          && pid == request.auth.uid
+          && request.resource.data.id == pid
+          && request.resource.data.k == rid
+          && getAfter(/databases/$(database)/documents/rooms/$(rid)).data.n == get(/databases/$(database)/documents/rooms/$(rid)).data.n + 1;
+        allow update: if signedIn()
           && pid == request.auth.uid
           && request.resource.data.id == pid
           && request.resource.data.k == rid;
         // 같은 방 랭킹을 보려고 로그인한 참가자는 모두 읽을 수 있다(이름·자산만 저장)
         allow read: if signedIn();
-        // 방을 만든 선생님은 방을 지울 때 참가자 기록도 지울 수 있다
-        allow delete: if teacher()
-          && get(/databases/$(database)/documents/rooms/$(rid)).data.owner == request.auth.uid;
+        allow delete: if master() || (teacher()
+          && get(/databases/$(database)/documents/rooms/$(rid)).data.owner == request.auth.uid);
       }
 
       // 수업용 방의 학생 후기(학번·이름·글): 학생은 자기 후기만 쓰고, 읽기·삭제는 방을 만든 선생님만
@@ -40,13 +154,15 @@ service cloud.firestore {
           && request.resource.data.q1 is string && request.resource.data.q1.size() <= 1000
           && request.resource.data.q2 is string && request.resource.data.q2.size() <= 1000
           && request.resource.data.q3 is string && request.resource.data.q3.size() <= 1000;
-        allow read, delete: if teacher()
-          && get(/databases/$(database)/documents/rooms/$(rid)).data.owner == request.auth.uid;
+        allow read, delete: if master() || (teacher()
+          && get(/databases/$(database)/documents/rooms/$(rid)).data.owner == request.auth.uid);
       }
     }
 
+    // Bull Run 진행자 개인 문서(실제 공개 코드·입장 비밀번호)
     match /hosts/{uid}/rooms/{rid} {
       allow read, write: if teacher() && request.auth.uid == uid;
+      allow read, delete: if master();
     }
   }
 }
