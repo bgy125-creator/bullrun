@@ -4,7 +4,7 @@ rules_version = '2';
 // 이 파일 하나만 게시한다(Bull Run 폴더의 fb-rules.ps1도 이 파일을 게시).
 // - 마스터: bgy125@gmail.com 구글 계정. 모든 기록을 보고 지울 수 있다.
 // - 선생님: 구글 로그인 + 마스터가 준 초대 코드로 등록(teachers/{uid}, st=='ok'). 방 수·학생 수 제한(lim).
-// - Econ Play 학생: 입장 코드 + 학번 + PIN (이메일·비밀번호 로그인, 이메일 = 방코드_학번-v판@econplay.app).
+// - Econ Play 학생: 학교 + 학번 + PIN (이메일·비밀번호 로그인, 이메일 = 학교코드_학번-v판@econplay.app). 가입 때 입장 코드로 반에 들어간다.
 // - Bull Run 학생: 익명 로그인(또는 Econ Play 학생 로그인 그대로).
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -17,13 +17,22 @@ service cloud.firestore {
     function tmeAfter() { return getAfter(tpath(request.auth.uid)).data; }
     function onlyKeys(ks) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(ks); }
 
+    // ───── 학교 목록(문서 이름 = 띄어쓰기를 뺀 학교 이름, c = 계정에 쓰는 영문 6자리)
+    match /schools/{sid} {
+      allow get, list: if true;
+      allow create: if google() && request.resource.data.keys().hasOnly(['nm', 'c', 't'])
+        && request.resource.data.nm is string && request.resource.data.nm.size() >= 2 && request.resource.data.nm.size() <= 30
+        && request.resource.data.c.matches('^[a-z0-9]{6}$');
+      allow update, delete: if master();
+    }
+
     // ───── 선생님 명단
     match /teachers/{uid} {
       allow get: if master() || (google() && request.auth.uid == uid);
       allow list: if master();
       // 마스터는 초대 코드 없이 자기 자신을 등록, 다른 선생님은 쓰지 않은 초대 코드가 있어야 한다
       allow create: if google() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['nm', 'em', 't', 'st', 'lim', 'er', 'br', 'inv'])
+        && request.resource.data.keys().hasOnly(['nm', 'em', 't', 'st', 'lim', 'er', 'br', 'inv', 'sc', 'scn'])
         && request.resource.data.st == 'ok' && request.resource.data.er == 0 && request.resource.data.br == 0
         && request.resource.data.em == request.auth.token.email
         && (master()
@@ -35,7 +44,10 @@ service cloud.firestore {
       allow update: if master()
         || (teacher() && request.auth.uid == uid && onlyKeys(['er', 'br'])
           && request.resource.data.er >= 0 && request.resource.data.er <= resource.data.lim.er
-          && request.resource.data.br >= 0 && request.resource.data.br <= resource.data.lim.br);
+          && request.resource.data.br >= 0 && request.resource.data.br <= resource.data.lim.br)
+        // 학교는 아직 정하지 않았을 때 한 번만 정한다(바꾸려면 마스터)
+        || (teacher() && request.auth.uid == uid && onlyKeys(['sc', 'scn']) && !('sc' in resource.data)
+          && request.resource.data.sc.matches('^[a-z0-9]{6}$'));
       allow delete: if master();
     }
 
@@ -53,7 +65,8 @@ service cloud.firestore {
       allow get: if true;
       allow list: if master() || (teacher() && resource.data.owner == request.auth.uid);
       allow create: if teacher() && code.matches('^[0-9]{4}$')
-        && request.resource.data.keys().hasOnly(['nm', 'owner', 't', 'n', 'lim', 'closed'])
+        && request.resource.data.keys().hasOnly(['nm', 'owner', 't', 'n', 'lim', 'closed', 'sc'])
+        && request.resource.data.sc == tme().sc
         && request.resource.data.owner == request.auth.uid
         && request.resource.data.nm is string && request.resource.data.nm.size() >= 1 && request.resource.data.nm.size() <= 20
         && request.resource.data.n == 0 && request.resource.data.closed == false
@@ -80,7 +93,7 @@ service cloud.firestore {
       allow delete: if master();
     }
 
-    // ───── Econ Play 학생 기록(문서 이름 = 방코드_학번). 반 방을 지워도 기록은 남는다.
+    // ───── Econ Play 학생 기록(문서 이름 = 학교코드_학번). 반 방을 지워도 기록은 남는다.
     match /eStudents/{key} {
       function lv() { return get(/databases/$(database)/documents/eLogins/$(key)).data.v; }
       function lvAfter() { return getAfter(/databases/$(database)/documents/eLogins/$(key)).data.v; }
@@ -93,8 +106,9 @@ service cloud.firestore {
       allow list: if master() || (teacher() && resource.data.tu == request.auth.uid);
       // 가입: 로그인 판 번호·방 인원과 함께 한 번에 만든다
       allow create: if meAfter()
-        && request.resource.data.keys().hasOnly(['sid', 'nm', 'sex', 'code', 'tu', 't', 'day', 'U'])
-        && key == request.resource.data.code + '_' + request.resource.data.sid
+        && request.resource.data.keys().hasOnly(['sid', 'nm', 'sex', 'sc', 'scn', 'code', 'tu', 't', 'day', 'U'])
+        && key == request.resource.data.sc + '_' + request.resource.data.sid
+        && room(request.resource.data.code).sc == request.resource.data.sc
         && request.resource.data.sid.matches('^[0-9]{4,5}$')
         && request.resource.data.nm is string && request.resource.data.nm.size() >= 1 && request.resource.data.nm.size() <= 10
         && request.resource.data.tu == room(request.resource.data.code).owner
