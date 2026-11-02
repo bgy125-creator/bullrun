@@ -88,7 +88,8 @@ service cloud.firestore {
         && request.auth.token.email == key + '-v1@econplay.app';
       allow update: if onlyKeys(['v']) && request.resource.data.v == resource.data.v + 1
         && (master() || (teacher()
-          && get(/databases/$(database)/documents/eStudents/$(key)).data.tu == request.auth.uid));
+          && (get(/databases/$(database)/documents/eStudents/$(key)).data.get('tu', null) == request.auth.uid
+            || get(/databases/$(database)/documents/eStudents/$(key)).data.get('rqt', null) == request.auth.uid)));
       allow delete: if master();
     }
 
@@ -117,19 +118,20 @@ service cloud.firestore {
         && request.resource.data.code == null && request.resource.data.tu == null
         && okReq(request.resource.data);
       allow update: if master()
-        // 학생: 기록 저장, 반이 없을 때 가입 요청 보내기·바꾸기
+        // 학생: 기록 저장, 반 가입 요청 보내기·바꾸기(반에 있어도 다른 반으로 옮기는 요청 가능)
         || (me() && onlyKeys(['sex', 'day', 'U', 'rq', 'rqt', 'rqn', 'rj'])
-          && (request.resource.data.rq == resource.data.get('rq', null) || (resource.data.tu == null && okReq(request.resource.data))))
-        // 선생님 허용: 요청한 반으로 연결
-        || (teacher() && resource.data.rqt == request.auth.uid && onlyKeys(['code', 'tu', 'cn', 'rq', 'rqt', 'rqn', 'rj'])
-          && request.resource.data.code == resource.data.rq && request.resource.data.tu == request.auth.uid
-          && request.resource.data.rq == null && request.resource.data.rqt == null)
-        // 선생님 거절
-        || (teacher() && resource.data.rqt == request.auth.uid && onlyKeys(['rq', 'rqt', 'rqn', 'rj'])
-          && request.resource.data.rq == null && request.resource.data.rqt == null && request.resource.data.rj == true)
-        // 선생님: 반을 지울 때 학생과의 연결만 끊는다(기록은 남김)
-        || (teacher() && resource.data.tu == request.auth.uid && onlyKeys(['code', 'tu', 'cn'])
-          && request.resource.data.code == null && request.resource.data.tu == null);
+          && (request.resource.data.get('rq', null) == resource.data.get('rq', null) || okReq(request.resource.data)))
+        // 선생님(내 반 학생 또는 나에게 요청한 학생): 내 반으로 넣기(허용·옮기기)
+        // 또는 반에서 빼기(거절·반 지우기·다른 선생님 반으로 요청 넘기기)
+        || (teacher() && (resource.data.get('tu', null) == request.auth.uid || resource.data.get('rqt', null) == request.auth.uid)
+          && onlyKeys(['code', 'tu', 'cn', 'rq', 'rqt', 'rqn', 'rj'])
+          && ((request.resource.data.code != null && room(request.resource.data.code).owner == request.auth.uid
+              && request.resource.data.tu == request.auth.uid && request.resource.data.get('rq', null) == null)
+            // 반에서 빼거나, 나에게 온 요청만 정리(이미 다른 반에 있는 학생은 그 반은 그대로)
+            || ((request.resource.data.code == null && request.resource.data.tu == null
+                || (resource.data.get('rqt', null) == request.auth.uid
+                  && request.resource.data.code == resource.data.get('code', null) && request.resource.data.tu == resource.data.get('tu', null)))
+              && okReq(request.resource.data))));
       allow delete: if master();
     }
 
