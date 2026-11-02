@@ -20,7 +20,7 @@ service cloud.firestore {
     // ───── 학교 목록(문서 이름 = 띄어쓰기를 뺀 학교 이름, c = 계정에 쓰는 영문 6자리)
     match /schools/{sid} {
       allow get, list: if true;
-      allow create: if google() && request.resource.data.keys().hasOnly(['nm', 'c', 't'])
+      allow create: if teacher() && request.resource.data.keys().hasOnly(['nm', 'c', 't'])
         && request.resource.data.nm is string && request.resource.data.nm.size() >= 2 && request.resource.data.nm.size() <= 30
         && request.resource.data.c.matches('^[a-z0-9]{6}$');
       allow update, delete: if master();
