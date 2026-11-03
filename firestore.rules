@@ -87,13 +87,15 @@ service cloud.firestore {
     match /eLogins/{key} {
       allow get: if true;
       allow create: if signedIn() && request.resource.data.keys().hasOnly(['v'])
-        && request.resource.data.v == 1
-        && request.auth.token.email == key + '-v1@econplay.app';
+        && request.resource.data.v is int && request.resource.data.v >= 1 && request.resource.data.v <= 20
+        && request.auth.token.email == key + '-v' + string(request.resource.data.v) + '@econplay.app';
       allow update: if onlyKeys(['v']) && request.resource.data.v == resource.data.v + 1
         && (master() || (teacher()
           && (get(/databases/$(database)/documents/eStudents/$(key)).data.get('tu', null) == request.auth.uid
             || get(/databases/$(database)/documents/eStudents/$(key)).data.get('rqt', null) == request.auth.uid)));
-      allow delete: if master();
+      // 학생 삭제: 마스터, 또는 그 학생이 내 반에 있는 선생님
+      allow delete: if master() || (teacher()
+        && get(/databases/$(database)/documents/eStudents/$(key)).data.get('tu', null) == request.auth.uid);
     }
 
     // ───── Econ Play 학생 기록(문서 이름 = 학교코드_학번). 반을 지워도 기록은 남는다.
@@ -135,7 +137,8 @@ service cloud.firestore {
                 || (resource.data.get('rqt', null) == request.auth.uid
                   && request.resource.data.code == resource.data.get('code', null) && request.resource.data.tu == resource.data.get('tu', null)))
               && okReq(request.resource.data))));
-      allow delete: if master();
+      // 학생 삭제(기록도 모두 지움): 마스터, 또는 그 학생이 내 반에 있는 선생님
+      allow delete: if master() || (teacher() && resource.data.get('tu', null) == request.auth.uid);
     }
 
     // ───── Bull Run 방
