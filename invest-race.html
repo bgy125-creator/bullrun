@@ -173,7 +173,7 @@ function begin(){
  if(!cls&&!gnm){document.getElementById('rmmsg').textContent='이름이나 별명을 입력해 주세요.';return}
  NM=cls?snm:gnm;
  if(ROOMU){try{ROOMU()}catch(e){}ROOMU=null}
- const rm=R0?{room:R0.name,rid:R0.id,rsalt:R0.salt,rh:R0.h,rmode:R0.mode==='btn'?'btn':'code',lv:R0.lv==='easy'?'easy':'hard',ropen:-1,use:cls?'class':'game',sid}:(rv==='solo'||DB)?{room:'혼자 연습',solo:1,lv:((document.querySelector('input[name=slv]:checked')||{}).value)==='easy'?'easy':'hard'}:{room:PRE.rmName||'교실'};
+ const rm=R0?{room:R0.name,rid:R0.id,rt:+R0.t||0,rsalt:R0.salt,rh:R0.h,rmode:R0.mode==='btn'?'btn':'code',lv:R0.lv==='easy'?'easy':'hard',ropen:-1,use:cls?'class':'game',sid}:(rv==='solo'||DB)?{room:'혼자 연습',solo:1,lv:((document.querySelector('input[name=slv]:checked')||{}).value)==='easy'?'easy':'hard'}:{room:PRE.rmName||'교실'};
  S={...rm,t0:Date.now(),nm:NM||'참가자',y,m,d,ps:periods(y),i:0,w:1000000,log:[],risk:[],hist:[1e6],pid:FBA&&FBA.currentUser?FBA.currentUser.uid:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)};report('join');
  roomSub();depName();
  bday()}
@@ -338,8 +338,9 @@ function frac(id,k){setAmt(id,k?Math.floor(S.w/k):0)}
 const TY=[['🐢','거북이 저축러','안정형','잃지 않는 게 최고의 수익! 예금과 금처럼 흔들림이 적은 자산을 좋아해요.','원금을 지키는 힘은 훌륭해요. 다만 예금 이자만으로는 물가가 오르는 속도를 따라가지 못할 때가 있어요. 여윳돈의 일부를 코스피 ETF처럼 여러 회사가 함께 담긴 상품에 오래 넣어 두는 연습을 해 보세요.'],['🐿️','도토리 다람쥐','안정추구형','조금씩 차곡차곡 모으는 타입이에요. 안전을 챙기면서 약간의 수익을 노려요.','안전을 챙기면서 조금씩 도전하는 습관이 좋아요. 다음에는 투자하기 전에 보도자료의 금리·환율 흐름을 먼저 읽고, 왜 이 상품을 고르는지 한 줄로 적어 보세요. 이유가 분명하면 값이 흔들려도 덜 불안해요.'],['🐬','균형 잡는 돌고래','위험중립형','파도를 헤치며 균형을 잡는 타입이에요. 안전한 상품과 수익을 노리는 상품에 돈을 골고루 나눠 담아요.','위험과 수익의 균형을 잘 잡았어요. 한 단계 더 나아가려면 상품별 비중을 미리 정해 두고, 많이 오른 상품은 조금 줄이고 덜 오른 상품은 조금 늘려 처음 비중으로 되돌리는 리밸런싱을 해 보세요.'],['🦊','눈치 빠른 여우','적극투자형','기회를 노려 움직이는 타입이에요. 흔들림이 커도 수익 기회를 적극적으로 찾아요.','기회를 찾는 감각이 좋아요. 다만 소식 하나만 믿고 크게 걸면 예상이 빗나갈 때 손실도 커요. 한 상품에 넣을 돈의 한도(예: 보유 금액의 절반)를 미리 정해 두면 실수를 줄일 수 있어요.'],['🐯','불 속의 호랑이','공격투자형','고위험 고수익에 도전하는 타입이에요. 큰 위험을 감수하고 높은 수익을 노려요.','과감한 도전으로 큰 수익을 낼 수도 있지만, 큰 손실은 되찾기 어려워요. 50%를 잃으면 100%가 올라야 원금으로 돌아와요. 일부는 예금이나 금처럼 덜 흔들리는 자산에 나눠 두는 안전판을 꼭 만들어 보세요.']];
 function end(){const avg=S.risk.reduce((a,b)=>a+b,0)/S.risk.length;S.ty=avg<.6?0:avg<1.2?1:avg<1.8?2:avg<2.4?3:4;
  report('done');clearGame();saveLast();finalPg()}
-// 지난 결과: 이 기기에서 마지막으로 끝낸 레이스 1판만 10일 동안 남겨, 첫 화면 버튼으로 결과 화면에 돌아온다(후기를 안 냈으면 이어서 쓰기)
-const LKEY='bullrun_last',LDAYS=10;
+// 지난 결과: 이 기기에서 마지막으로 끝낸 레이스 1판만 30일 동안 남겨, 첫 화면 버튼으로 결과 화면에 돌아온다(후기를 안 냈으면 이어서 쓰기)
+const LKEY='bullrun_last',LDAYS=30;
+// 참가 기록(bullrun_play {t 최근 참가, rt 방 만든 때}): Econ Play 첫 화면이 최근 접속일·데이터 삭제 예정일(방 만든 날 + 30일)을 보여 준다
 function getLast(){try{const L=JSON.parse(localStorage.getItem(LKEY)||'[]');return Array.isArray(L)?L.filter(x=>x&&x.S&&Array.isArray(x.S.log)&&Date.now()-x.t<LDAYS*864e5).slice(0,1):[]}catch(e){return[]}}
 // ── Econ Play와 함께 쓰는 선생님 등록(teachers)·방 인원·30일 정리
 const EP_URL='https://bgy125-creator.github.io/',BR_DAYS=30,MASTER='bgy125@gmail.com';
@@ -420,7 +421,7 @@ const rkey=r=>{let h=5381;for(const ch of r)h=((h<<5)+h+ch.charCodeAt(0))|0;retu
 function okRec(r){if(!r||typeof r.id!=='string'||!Array.isArray(r.h)||!r.h.every(x=>typeof x==='number'&&isFinite(x)))return null;const by=+r.by,i=+r.i,n=+r.n;if(!(by>=1940&&by<=2024&&i>=0&&n>=1&&n<=9))return null;return{id:String(r.id).slice(0,40),k:String(r.k||''),nm:String(r.nm||'').slice(0,12),by,i,n,st:['join','wait','shown','done'].includes(r.st)?r.st:'join',h:r.h.slice(0,12),t:+r.t||0}}
 function encode(r){return 'IR1.'+btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(r))))}
 function decode(t){try{if(t.slice(0,4)!=='IR1.')return null;return okRec(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(t.slice(4)),c=>c.charCodeAt(0)))))}catch(e){return null}}
-function report(st){try{S.st=st;const h=S.hist.slice();if(st==='wait'&&S.cur)h.push(S.cur.after);const r={k:S.rid||rkey(S.room),id:S.pid,nm:S.nm,by:S.y,i:S.i,n:S.ps.length,st,h,t:Date.now()};S.code=encode(r);if(S.solo)return;if(DB)pSet(r);liveSend(r)}catch(e){}}
+function report(st){try{S.st=st;if(!S.view)try{localStorage.setItem('bullrun_play',JSON.stringify({t:Date.now(),rt:S.rt||0}))}catch(e){}const h=S.hist.slice();if(st==='wait'&&S.cur)h.push(S.cur.after);const r={k:S.rid||rkey(S.room),id:S.pid,nm:S.nm,by:S.y,i:S.i,n:S.ps.length,st,h,t:Date.now()};S.code=encode(r);if(S.solo)return;if(DB)pSet(r);liveSend(r)}catch(e){}}
 function codeBox(){if(live()||S.solo)return '';return `<details class='card'><summary>📣 진행 보고 코드</summary><p class='mut'>자동 연결이 안 되는 환경이에요. 이 코드를 진행자에게 보내면 진행자 화면에서 내 진행 상황을 볼 수 있어요.</p><textarea id='cc' readonly rows='3' style='font-size:11px;word-break:break-all'>${S.code||''}</textarea><button class='st' style='width:auto;padding:0 14px;font-size:14px;margin-top:6px' onclick='copyCode()'>복사</button></details>`}
 function copyCode(){const t=document.getElementById('cc');t.select();try{navigator.clipboard.writeText(t.value)}catch(e){document.execCommand('copy')}}
 function hostRoomName(){return((document.getElementById('hr')||{}).value||'').trim()||'교실'}
